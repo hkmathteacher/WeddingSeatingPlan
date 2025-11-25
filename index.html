@@ -1,268 +1,284 @@
-import React, { useState, useEffect } from 'react';
-import { Users, AlertCircle, Search, Table as TableIcon, RefreshCw, AlertTriangle } from 'lucide-react';
-
-// ==========================================
-// 【設定區】請在此處貼上您的 Google Sheet CSV 連結
-// 步驟：檔案 > 共用 > 發佈到網路 > 選擇「整份文件」與「逗號分隔值 (.csv)」 > 發佈
-// ==========================================
-const GOOGLE_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vThrqMB04QqHdh3OfyQT10e1b3AsEQgV3E3xAcdGzNghGkwcS5AxAyxDT6Eru3pRpNZ0nEa0o7XDUW1/pub?gid=0&single=true&output=csv"; 
-// 例如: "https://docs.google.com/spreadsheets/d/e/2PACX-1vT..../pub?output=csv"
-
-const BanquetSeatingMap = () => {
-  const [isLoading, setIsLoading] = useState(true);
-  const [errorMsg, setErrorMsg] = useState('');
-  
-  const [searchTerm, setSearchTerm] = useState('');
-  const [parsedTables, setParsedTables] = useState({});
-  const [totalGuests, setTotalGuests] = useState(0);
-
-  // 解析 CSV 數據
-  const processData = (csvText) => {
-    if (!csvText) return;
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>婚宴座位視覺化系統</title>
     
-    const lines = csvText.split('\n');
-    const tables = {};
-    let guestCount = 0;
+    <!-- 引入 Tailwind CSS (樣式庫) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 引入 React 和 React DOM -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    
+    <!-- 引入 Babel (讓瀏覽器看懂 React 代碼) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    // 初始化 25 張檯
-    for (let i = 1; i <= 25; i++) {
-      tables[i] = [];
-    }
+    <style>
+        body { background-color: #f8fafc; }
+        /* 自定義捲軸樣式 */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
 
-    lines.forEach(line => {
-      // 處理 CSV 分隔 (相容 Google Sheet CSV 格式)
-      const cols = line.replace(/\t/g, ',').split(',');
+    <script type="text/babel">
+        // ==========================================
+        // 【設定區】請在此處貼上您的 Google Sheet CSV 連結
+        // 步驟：檔案 > 共用 > 發佈到網路 > 選擇「整份文件」與「逗號分隔值 (.csv)」 > 發佈
+        // ==========================================
+        const GOOGLE_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vThrqMB04QqHdh3OfyQT10e1b3AsEQgV3E3xAcdGzNghGkwcS5AxAyxDT6Eru3pRpNZ0nEa0o7XDUW1/pub?gid=0&single=true&output=csv"; 
+        // 請將上方引號內的網址換成您自己的
 
-      // 【動態處理邏輯更新】
-      // 不再鎖定只讀取 A-L (4組)，而是使用迴圈每 3 欄一組往右無限讀取
-      // i 代表每一組的起始索引：0 (A欄), 3 (D欄), 6 (G欄), 9 (J欄), 12 (M欄)...
-      for (let i = 0; i < cols.length; i += 3) {
-        const idxName = i;       // 姓名欄
-        const idxChurch = i + 1; // 教會欄
-        const idxTable = i + 2;  // 檯號/酒店欄
+        // --- 以下是圖標組件 (Icons) ---
+        const Users = ({className}) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        );
+        const AlertCircle = ({className}) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        );
+        const Search = ({className}) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        );
+        const TableIcon = ({className}) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M12 3v18"/><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/></svg>
+        );
+        const RefreshCw = ({className}) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+        );
+        const AlertTriangle = ({className}) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        );
 
-        // 確保目前這組至少有「姓名」和「檯號」這兩個欄位存在
-        if (cols[idxName] && cols[idxTable]) {
-          const name = cols[idxName].trim().replace(/^"|"$/g, ''); // 移除可能的 CSV 引號
-          
-          // 教會欄位若為 undefined 則給空字串
-          const churchRaw = cols[idxChurch] ? cols[idxChurch].trim() : '';
-          const church = churchRaw.replace(/^"|"$/g, '');
-          
-          // 處理酒店/檯號欄位
-          const tableStr = cols[idxTable].trim().replace(/^"|"$/g, '');
-          const tableNo = parseInt(tableStr, 10);
-
-          // 【過濾邏輯】：
-          // 1. 名字必須有值
-          // 2. 檯號必須是數字 (!isNaN) -> 自動排除 "不去", "待定" 等文字
-          // 3. 檯號必須在 1-25 之間
-          if (name && !isNaN(tableNo) && tableNo >= 1 && tableNo <= 25) {
-            tables[tableNo].push({ name, church });
-            guestCount++;
-          }
-        }
-      }
-    });
-
-    setParsedTables(tables);
-    setTotalGuests(guestCount);
-  };
-
-  const fetchData = async () => {
-    // 如果使用者還沒填寫連結，使用預設空資料或顯示提示
-    if (!GOOGLE_SHEET_CSV_URL || GOOGLE_SHEET_CSV_URL.includes("在此處貼上")) {
-      setErrorMsg("尚未設定 Google Sheet 連結。請在程式碼第 6 行貼上 URL。");
-      setIsLoading(false);
-      
-      // 僅供預覽用的假資料
-      const demoData = `預覽人A,教會,1,預覽人B,教會,1,預覽人C,教會,2,不出席者,教會,不去
-預覽人D,教會,2,預覽人E,教會,2,,,,,,
-動態M欄人,教會,15,動態P欄人,教會,15,,,
-`;
-      processData(demoData);
-      return;
-    }
-
-    setIsLoading(true);
-    setErrorMsg('');
-
-    try {
-      const response = await fetch(GOOGLE_SHEET_CSV_URL);
-      if (!response.ok) {
-        throw new Error(`讀取失敗 (Status: ${response.status})`);
-      }
-      const text = await response.text();
-      processData(text);
-    } catch (err) {
-      console.error(err);
-      setErrorMsg("讀取資料發生錯誤，請檢查連結是否正確且已發佈到網路。");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // 初始載入
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  // 處理搜尋高亮
-  const isHighlighted = (guestName) => {
-    if (!searchTerm) return false;
-    return guestName.toLowerCase().includes(searchTerm.toLowerCase());
-  };
-
-  return (
-    <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans">
-      <div className="max-w-7xl mx-auto space-y-6">
-        
-        {/* Header 工具列 */}
-        <div className="flex flex-col md:flex-row justify-between items-center bg-white p-4 md:p-6 rounded-xl shadow-sm border border-slate-200 gap-4 sticky top-0 z-20">
-          <div className="flex items-center gap-3 w-full md:w-auto">
-            <div className="bg-indigo-600 p-2 rounded-lg">
-              <TableIcon className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h1 className="text-xl md:text-2xl font-bold text-slate-800">
-                婚宴座位圖
-              </h1>
-              {errorMsg ? (
-                <p className="text-xs text-red-500 font-medium flex items-center gap-1">
-                  <AlertTriangle className="w-3 h-3" /> {errorMsg}
-                </p>
-              ) : (
-                <p className="text-xs text-green-600 flex items-center gap-1">
-                  <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                  資料已同步 (自動偵測欄位)
-                </p>
-              )}
-            </div>
-          </div>
-          
-          <div className="flex flex-col md:flex-row gap-3 items-center w-full md:w-auto">
-             {/* 統計資訊 */}
-             <div className="bg-slate-100 px-4 py-2 rounded-lg border border-slate-200 flex items-center gap-2 w-full md:w-auto justify-center">
-                <Users className="w-4 h-4 text-slate-500" />
-                <span className="text-sm font-medium text-slate-700">總賓客: <span className="text-lg font-bold text-indigo-600">{totalGuests}</span></span>
-             </div>
-
-             {/* 搜尋框 */}
-             <div className="relative w-full md:w-auto">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input 
-                  type="text" 
-                  placeholder="搜尋姓名..." 
-                  className="w-full md:w-64 pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-             </div>
-
-             {/* 重新整理按鈕 */}
-             <button 
-                onClick={fetchData}
-                disabled={isLoading}
-                className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                title="重新整理資料"
-             >
-               <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
-             </button>
-          </div>
-        </div>
-
-        {/* 狀態說明列 */}
-        <div className="flex flex-wrap gap-4 text-xs text-slate-600 px-2">
-            <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-green-100 border border-green-300"></span> 空位充足</div>
-            <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-yellow-100 border border-yellow-300"></span> 即將滿座 (10-12人)</div>
-            <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-red-100 border border-red-300"></span> 超額 (&gt;12人)</div>
-        </div>
-
-        {/* 座位圖 Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pb-12">
-          {Object.keys(parsedTables).map((tableId) => {
-            const guests = parsedTables[tableId];
-            const count = guests.length;
-            const isFull = count >= 12; // 12人滿
-            const isOver = count > 12;  // 超過12人
-            const isNearFull = count >= 10 && count <= 12; // 10-12人警戒
+        // --- 主程式邏輯 ---
+        const BanquetSeatingMap = () => {
+            const [isLoading, setIsLoading] = React.useState(true);
+            const [errorMsg, setErrorMsg] = React.useState('');
             
-            // 樣式判斷
-            let containerClass = "border-slate-200 bg-white";
-            let headerClass = "bg-slate-50 border-b border-slate-100";
-            let badgeClass = "bg-slate-200 text-slate-600";
-            
-            if (isOver) {
-              containerClass = "border-red-300 bg-red-50/50 ring-1 ring-red-200";
-              headerClass = "bg-red-100/50 border-b border-red-200";
-              badgeClass = "bg-red-500 text-white";
-            } else if (isNearFull) {
-              containerClass = "border-yellow-300 bg-yellow-50/30";
-              headerClass = "bg-yellow-100/40 border-b border-yellow-200";
-              badgeClass = "bg-yellow-500 text-white shadow-sm";
-            } else if (count > 0) {
-              containerClass = "border-green-200 bg-green-50/30";
-              headerClass = "bg-green-100/40 border-b border-green-200";
-              badgeClass = "bg-green-600 text-white shadow-sm";
-            }
+            const [searchTerm, setSearchTerm] = React.useState('');
+            const [parsedTables, setParsedTables] = React.useState({});
+            const [totalGuests, setTotalGuests] = React.useState(0);
 
-            // 搜尋高亮效果
-            const hasSearchResult = guests.some(g => isHighlighted(g.name));
-            const highlightEffect = hasSearchResult 
-              ? "ring-2 ring-indigo-500 shadow-xl scale-[1.02] z-10" 
-              : "hover:shadow-md hover:border-indigo-200";
+            // 解析 CSV 數據
+            const processData = (csvText) => {
+                if (!csvText) return;
+                
+                const lines = csvText.split('\n');
+                const tables = {};
+                let guestCount = 0;
+
+                // 初始化 25 張檯
+                for (let i = 1; i <= 25; i++) {
+                    tables[i] = [];
+                }
+
+                lines.forEach(line => {
+                    // 簡單處理 CSV (若內容包含逗號可能會被誤切，但通常 Google Export 對簡單名單沒問題)
+                    const cols = line.replace(/\t/g, ',').split(',');
+
+                    // 動態迴圈：每 3 欄一組 (名, 教會, 檯號)
+                    for (let i = 0; i < cols.length; i += 3) {
+                        const idxName = i;
+                        const idxChurch = i + 1;
+                        const idxTable = i + 2;
+
+                        if (cols[idxName] && cols[idxTable]) {
+                            const name = cols[idxName].trim().replace(/^"|"$/g, '');
+                            const churchRaw = cols[idxChurch] ? cols[idxChurch].trim() : '';
+                            const church = churchRaw.replace(/^"|"$/g, '');
+                            const tableStr = cols[idxTable].trim().replace(/^"|"$/g, '');
+                            const tableNo = parseInt(tableStr, 10);
+
+                            // 過濾邏輯：名字存在 且 檯號是數字 且 1-25 之間
+                            if (name && !isNaN(tableNo) && tableNo >= 1 && tableNo <= 25) {
+                                tables[tableNo].push({ name, church });
+                                guestCount++;
+                            }
+                        }
+                    }
+                });
+
+                setParsedTables(tables);
+                setTotalGuests(guestCount);
+            };
+
+            const fetchData = async () => {
+                // 檢查連結是否設定
+                if (!GOOGLE_SHEET_CSV_URL || GOOGLE_SHEET_CSV_URL.includes("在此處貼上")) {
+                    setErrorMsg("尚未設定 Google Sheet 連結。請用記事本開啟此檔案，修改第 32 行。");
+                    setIsLoading(false);
+                    // 預設假資料
+                    const demoData = `預覽人A,教會,1,預覽人B,教會,1,預覽人C,教會,2,不出席者,教會,不去\n預覽人D,教會,2,,,,,,`;
+                    processData(demoData);
+                    return;
+                }
+
+                setIsLoading(true);
+                setErrorMsg('');
+
+                try {
+                    const response = await fetch(GOOGLE_SHEET_CSV_URL);
+                    if (!response.ok) {
+                        throw new Error(`讀取失敗 (Status: ${response.status})`);
+                    }
+                    const text = await response.text();
+                    processData(text);
+                } catch (err) {
+                    console.error(err);
+                    setErrorMsg("讀取資料發生錯誤，請檢查連結是否正確且已發佈到網路。");
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+
+            React.useEffect(() => {
+                fetchData();
+            }, []);
+
+            const isHighlighted = (guestName) => {
+                if (!searchTerm) return false;
+                return guestName.toLowerCase().includes(searchTerm.toLowerCase());
+            };
 
             return (
-              <div key={tableId} className={`relative rounded-xl border ${containerClass} ${highlightEffect} flex flex-col transition-all duration-200 overflow-hidden`}>
-                
-                {/* Card Header */}
-                <div className={`flex justify-between items-center px-4 py-3 ${headerClass}`}>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center font-serif text-lg font-bold shadow-sm">
-                      {tableId}
-                    </div>
-                    <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Table</span>
-                  </div>
-                  <div className={`text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1.5 ${badgeClass}`}>
-                    {isOver && <AlertCircle className="w-3 h-3" />}
-                    {count} / 12
-                  </div>
-                </div>
+                <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans">
+                    <div className="max-w-7xl mx-auto space-y-6">
+                        
+                        {/* Header */}
+                        <div className="flex flex-col md:flex-row justify-between items-center bg-white p-4 md:p-6 rounded-xl shadow-sm border border-slate-200 gap-4 sticky top-0 z-20">
+                            <div className="flex items-center gap-3 w-full md:w-auto">
+                                <div className="bg-indigo-600 p-2 rounded-lg">
+                                    <TableIcon className="w-6 h-6 text-white" />
+                                </div>
+                                <div>
+                                    <h1 className="text-xl md:text-2xl font-bold text-slate-800">婚宴座位圖</h1>
+                                    {errorMsg ? (
+                                        <p className="text-xs text-red-500 font-medium flex items-center gap-1">
+                                            <AlertTriangle className="w-3 h-3" /> {errorMsg}
+                                        </p>
+                                    ) : (
+                                        <p className="text-xs text-green-600 flex items-center gap-1">
+                                            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                                            資料已同步
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                            
+                            <div className="flex flex-col md:flex-row gap-3 items-center w-full md:w-auto">
+                                <div className="bg-slate-100 px-4 py-2 rounded-lg border border-slate-200 flex items-center gap-2 w-full md:w-auto justify-center">
+                                    <Users className="w-4 h-4 text-slate-500" />
+                                    <span className="text-sm font-medium text-slate-700">總賓客: <span className="text-lg font-bold text-indigo-600">{totalGuests}</span></span>
+                                </div>
 
-                {/* Card Body (List) */}
-                <div className="flex-1 p-3 min-h-[140px]">
-                  <div className="space-y-1.5">
-                    {guests.length === 0 ? (
-                      <div className="h-24 flex flex-col items-center justify-center text-slate-300 text-xs italic">
-                        <span>此桌目前無人</span>
-                      </div>
-                    ) : (
-                      guests.map((guest, idx) => (
-                        <div 
-                          key={idx} 
-                          className={`
-                            text-sm flex justify-between items-center px-3 py-1.5 rounded-md border
-                            ${isHighlighted(guest.name) 
-                              ? 'bg-yellow-100 text-yellow-900 border-yellow-300 font-bold shadow-sm' 
-                              : 'bg-white/60 border-transparent hover:border-slate-200 hover:bg-white text-slate-700'}
-                          `}
-                        >
-                          <span className="truncate font-medium">{guest.name}</span>
-                          <span className="text-[10px] text-slate-500 bg-slate-100/80 px-1.5 py-0.5 rounded ml-2 max-w-[40%] truncate">
-                            {guest.church}
-                          </span>
+                                <div className="relative w-full md:w-auto">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                    <input 
+                                        type="text" 
+                                        placeholder="搜尋姓名..." 
+                                        className="w-full md:w-64 pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                    />
+                                </div>
+
+                                <button 
+                                    onClick={fetchData}
+                                    disabled={isLoading}
+                                    className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                    title="重新整理資料"
+                                >
+                                <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
+                                </button>
+                            </div>
                         </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
-};
 
-export default BanquetSeatingMap;
+                        {/* Legend */}
+                        <div className="flex flex-wrap gap-4 text-xs text-slate-600 px-2">
+                            <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-green-100 border border-green-300"></span> 空位充足</div>
+                            <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-yellow-100 border border-yellow-300"></span> 即將滿座 (10-12人)</div>
+                            <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-red-100 border border-red-300"></span> 超額 (&gt;12人)</div>
+                        </div>
+
+                        {/* Grid */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pb-12">
+                            {Object.keys(parsedTables).map((tableId) => {
+                                const guests = parsedTables[tableId];
+                                const count = guests.length;
+                                const isFull = count >= 12;
+                                const isOver = count > 12;
+                                const isNearFull = count >= 10 && count <= 12;
+                                
+                                let containerClass = "border-slate-200 bg-white";
+                                let headerClass = "bg-slate-50 border-b border-slate-100";
+                                let badgeClass = "bg-slate-200 text-slate-600";
+                                
+                                if (isOver) {
+                                    containerClass = "border-red-300 bg-red-50/50 ring-1 ring-red-200";
+                                    headerClass = "bg-red-100/50 border-b border-red-200";
+                                    badgeClass = "bg-red-500 text-white";
+                                } else if (isNearFull) {
+                                    containerClass = "border-yellow-300 bg-yellow-50/30";
+                                    headerClass = "bg-yellow-100/40 border-b border-yellow-200";
+                                    badgeClass = "bg-yellow-500 text-white shadow-sm";
+                                } else if (count > 0) {
+                                    containerClass = "border-green-200 bg-green-50/30";
+                                    headerClass = "bg-green-100/40 border-b border-green-200";
+                                    badgeClass = "bg-green-600 text-white shadow-sm";
+                                }
+
+                                const hasSearchResult = guests.some(g => isHighlighted(g.name));
+                                const highlightEffect = hasSearchResult 
+                                ? "ring-2 ring-indigo-500 shadow-xl scale-[1.02] z-10" 
+                                : "hover:shadow-md hover:border-indigo-200";
+
+                                return (
+                                    <div key={tableId} className={`relative rounded-xl border ${containerClass} ${highlightEffect} flex flex-col transition-all duration-200 overflow-hidden`}>
+                                        <div className={`flex justify-between items-center px-4 py-3 ${headerClass}`}>
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center font-serif text-lg font-bold shadow-sm">
+                                                    {tableId}
+                                                </div>
+                                                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Table</span>
+                                            </div>
+                                            <div className={`text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1.5 ${badgeClass}`}>
+                                                {isOver && <AlertCircle className="w-3 h-3" />}
+                                                {count} / 12
+                                            </div>
+                                        </div>
+
+                                        <div className="flex-1 p-3 min-h-[140px]">
+                                            <div className="space-y-1.5">
+                                                {guests.length === 0 ? (
+                                                    <div className="h-24 flex flex-col items-center justify-center text-slate-300 text-xs italic">
+                                                        <span>此桌目前無人</span>
+                                                    </div>
+                                                ) : (
+                                                    guests.map((guest, idx) => (
+                                                        <div key={idx} className={`text-sm flex justify-between items-center px-3 py-1.5 rounded-md border ${isHighlighted(guest.name) ? 'bg-yellow-100 text-yellow-900 border-yellow-300 font-bold shadow-sm' : 'bg-white/60 border-transparent hover:border-slate-200 hover:bg-white text-slate-700'}`}>
+                                                            <span className="truncate font-medium">{guest.name}</span>
+                                                            <span className="text-[10px] text-slate-500 bg-slate-100/80 px-1.5 py-0.5 rounded ml-2 max-w-[40%] truncate">{guest.church}</span>
+                                                        </div>
+                                                    ))
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<BanquetSeatingMap />);
+    </script>
+</body>
+</html>
