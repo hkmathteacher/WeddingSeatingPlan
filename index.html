@@ -3,99 +3,338 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>婚宴座位視覺化系統 (5欄模式)</title>
-    <!-- 引入 Tailwind CSS -->
+    <title>Ballroom Seating Plan (Interactive)</title>
+    <!-- 引入 Tailwind CSS (用於介面控制元件) -->
     <script src="https://cdn.tailwindcss.com"></script>
+    
     <style>
-        body { background-color: #f8fafc; font-family: sans-serif; }
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        /* =========================================
+           整合您的 Ballroom CSS 樣式
+           ========================================= */
+        :root {
+            --bg-color: #f5f5f7;
+            --stage-bg: #2c3e50;
+            --table-border: #94a3b8;
+            --table-bg: #ffffff;
+            --text-main: #333;
+            
+            /* 狀態顏色變數 */
+            --status-empty: #f0fdf4; /* 綠色淡底 */
+            --status-border-empty: #4ade80;
+            
+            --status-near: #fefce8; /* 黃色淡底 */
+            --status-border-near: #facc15;
+            
+            --status-full: #fef2f2; /* 紅色淡底 */
+            --status-border-full: #f87171;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+        }
+
+        /* 舞台 */
+        .stage-container {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            margin-bottom: 40px;
+        }
+
+        .stage {
+            width: 280px;
+            height: 50px;
+            background-color: var(--stage-bg);
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-radius: 4px;
+            font-weight: bold;
+            letter-spacing: 2px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            font-size: 0.9rem;
+        }
+
+        /* 主座位區佈局 */
+        .plan-container {
+            position: relative;
+            background: white;
+            padding: 40px 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            overflow-x: auto; /* 手機版橫向捲動 */
+        }
+
+        .main-floor {
+            display: flex;
+            justify-content: center;
+            gap: 80px; /* 走道寬度 */
+            padding-bottom: 20px;
+        }
+
+        .side-group {
+            display: flex;
+            gap: 20px;
+        }
+
+        .column {
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+        }
+
+        .column.inner { margin-top: 50px; }
+        .column.outer { margin-top: 0px; }
+
+        /* 桌子樣式核心 */
+        .table-item {
+            width: 65px;
+            height: 65px;
+            border-radius: 50%;
+            border: 3px solid var(--table-border);
+            background-color: var(--table-bg);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+            box-shadow: 2px 2px 8px rgba(0,0,0,0.05);
+            user-select: none;
+        }
+
+        /* 椅子裝飾 (虛線圈) */
+        .table-item::before {
+            content: '';
+            position: absolute;
+            top: -5px; left: -5px; right: -5px; bottom: -5px;
+            border: 1px dashed #cbd5e1;
+            border-radius: 50%;
+            pointer-events: none;
+            transition: all 0.3s;
+        }
+
+        /* 桌號文字 */
+        .table-num {
+            font-size: 1.2rem;
+            font-weight: 800;
+            color: var(--text-main);
+            line-height: 1;
+        }
+
+        /* 人數小標籤 */
+        .guest-count {
+            font-size: 0.65rem;
+            color: #64748b;
+            font-weight: 600;
+            margin-top: 2px;
+        }
+
+        /* 互動效果 */
+        .table-item:hover {
+            transform: scale(1.1);
+            z-index: 10;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+
+        /* 狀態顏色類別 */
+        .table-item.status-empty {
+            background-color: var(--status-empty);
+            border-color: var(--status-border-empty);
+        }
+        .table-item.status-near {
+            background-color: var(--status-near);
+            border-color: var(--status-border-near);
+        }
+        .table-item.status-full {
+            background-color: var(--status-full);
+            border-color: var(--status-border-full);
+            color: #7f1d1d;
+        }
         
+        /* 搜尋命中效果 */
+        .table-item.matched {
+            animation: pulse-ring 2s infinite;
+            border-color: #6366f1; /* Indigo */
+            background-color: #e0e7ff;
+            z-index: 20;
+        }
+        .table-item.matched::before {
+            border-color: #6366f1;
+            border-style: solid;
+            border-width: 2px;
+        }
+
+        @keyframes pulse-ring {
+            0% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(99, 102, 241, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
+        }
+
+        /* 走道文字 */
+        .aisle-label {
+            position: absolute;
+            top: 55%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #e2e8f0;
+            font-weight: 900;
+            font-size: 2.5rem;
+            letter-spacing: 8px;
+            text-transform: uppercase;
+            pointer-events: none;
+            writing-mode: vertical-rl;
+            text-orientation: upright;
+            z-index: 0;
+            opacity: 0.6;
+        }
+
+        /* 手機適配 */
+        @media (max-width: 600px) {
+            .plan-container { padding: 20px 10px; }
+            .main-floor { gap: 40px; }
+            .side-group { gap: 10px; }
+            .table-item { width: 50px; height: 50px; }
+            .table-num { font-size: 1rem; }
+            .guest-count { font-size: 0.55rem; }
+            .column.inner { margin-top: 30px; }
+            .column { gap: 15px; }
+            .aisle-label { font-size: 1.5rem; letter-spacing: 4px; }
+        }
+        
+        /* Loading Animation */
         .spin { animation: spin 1s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
     </style>
 </head>
 <body class="p-4 md:p-8 min-h-screen">
 
-    <div class="max-w-7xl mx-auto space-y-6">
+    <div class="max-w-6xl mx-auto space-y-6">
         
-        <!-- Header 區域 -->
-        <div class="flex flex-col md:flex-row justify-between items-center bg-white p-4 md:p-6 rounded-xl shadow-sm border border-slate-200 gap-4 sticky top-0 z-20">
+        <!-- Header 工具列 (保留原本功能) -->
+        <div class="flex flex-col md:flex-row justify-between items-center bg-white p-4 md:p-6 rounded-xl shadow-sm border border-slate-200 gap-4 sticky top-0 z-50">
             <div class="flex items-center gap-3 w-full md:w-auto">
                 <div class="bg-indigo-600 p-2 rounded-lg">
-                    <svg class="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/></svg>
+                    <svg class="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18"/><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/></svg>
                 </div>
                 <div>
-                    <h1 class="text-xl md:text-2xl font-bold text-slate-800">婚宴座位圖</h1>
-                    <p id="status-msg" class="text-xs text-slate-500 flex items-center gap-1">
-                        初始化中...
-                    </p>
+                    <h1 class="text-xl md:text-2xl font-bold text-slate-800">Ballroom Seating Plan</h1>
+                    <p id="status-msg" class="text-xs text-slate-500 flex items-center gap-1">初始化中...</p>
                 </div>
             </div>
             
             <div class="flex flex-col md:flex-row gap-3 items-center w-full md:w-auto">
-                
-                <!-- 統計數據 -->
                 <div class="flex gap-2">
-                    <!-- 已入席 (有號碼) -->
-                    <div class="bg-slate-100 px-3 py-2 rounded-lg border border-slate-200 flex flex-col items-center justify-center min-w-[80px]">
-                        <span class="text-[10px] text-slate-500 font-medium uppercase">已入席</span>
+                    <div class="bg-slate-100 px-3 py-2 rounded-lg border border-slate-200 flex flex-col items-center justify-center min-w-[70px]">
+                        <span class="text-[10px] text-slate-500 font-medium uppercase">入席</span>
                         <span id="seated-guests" class="text-lg font-bold text-indigo-600 leading-none">0</span>
                     </div>
-                    
-                    <!-- 待編排 (Y) -->
-                    <div class="bg-orange-50 px-3 py-2 rounded-lg border border-orange-100 flex flex-col items-center justify-center min-w-[80px]">
-                        <span class="text-[10px] text-orange-600 font-medium uppercase">待編排(Y)</span>
+                    <div class="bg-orange-50 px-3 py-2 rounded-lg border border-orange-100 flex flex-col items-center justify-center min-w-[70px]">
+                        <span class="text-[10px] text-orange-600 font-medium uppercase">待定(Y)</span>
                         <span id="pending-guests" class="text-lg font-bold text-orange-600 leading-none">0</span>
                     </div>
                 </div>
 
-                <!-- 搜尋框 -->
                 <div class="relative w-full md:w-auto">
                     <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                    <input 
-                        type="text" 
-                        id="search-input"
-                        placeholder="搜尋姓名..." 
-                        class="w-full md:w-56 pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
-                    />
+                    <input type="text" id="search-input" placeholder="搜尋姓名..." class="w-full md:w-48 pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"/>
                 </div>
 
-                <!-- 重新整理按鈕 -->
-                <button 
-                    id="refresh-btn"
-                    class="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                    title="重新整理資料"
-                >
+                <button id="refresh-btn" class="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
                     <svg id="refresh-icon" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
                 </button>
             </div>
         </div>
 
-        <!-- 圖例 Legend -->
-        <div class="flex flex-wrap gap-4 text-xs text-slate-600 px-2">
-            <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-green-100 border border-green-300"></span> 空位充足</div>
-            <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-yellow-100 border border-yellow-300"></span> 即將滿座 (10-12人)</div>
-            <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-red-100 border border-red-300"></span> 超額 (&gt;12人)</div>
-            <div class="ml-auto text-slate-400 italic">註：僅顯示「酒店」欄位有填寫號碼者</div>
+        <!-- 視覺化地圖容器 -->
+        <div class="plan-container">
+            
+            <!-- 舞台 -->
+            <div class="stage-container">
+                <div class="stage">STAGE</div>
+            </div>
+
+            <!-- 背景走廊字 -->
+            <div class="aisle-label">MARCH IN</div>
+
+            <!-- 主座位區 (左右兩組) -->
+            <div class="main-floor">
+                <!-- 左側群組 -->
+                <div class="side-group">
+                    <div class="column outer" id="col-1"></div> <!-- 左外 -->
+                    <div class="column inner" id="col-2"></div> <!-- 左內 -->
+                </div>
+
+                <!-- 右側群組 -->
+                <div class="side-group">
+                    <div class="column inner" id="col-3"></div> <!-- 右內 -->
+                    <div class="column outer" id="col-4"></div> <!-- 右外 -->
+                </div>
+            </div>
+            
+            <!-- 圖例 -->
+            <div class="mt-8 flex gap-4 text-xs font-medium text-slate-500 bg-slate-50 px-4 py-2 rounded-full">
+                <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-[var(--status-border-empty)]"></span> 空位</div>
+                <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-[var(--status-border-near)]"></span> 緊張 (10-12)</div>
+                <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-[var(--status-border-full)]"></span> 爆滿 (>12)</div>
+            </div>
+
         </div>
 
-        <!-- 內容 Grid 容器 -->
-        <div id="tables-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pb-12">
-            <!-- JavaScript 會在這裡產生卡片 -->
+        <!-- 未在地圖上的桌號 (Overflow) -->
+        <div id="unmapped-section" class="hidden bg-white p-6 rounded-xl shadow-sm border border-slate-200 border-l-4 border-l-gray-400">
+            <h3 class="text-sm font-bold text-slate-600 mb-3 flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+                其他區域 (未在地圖編排的桌號)
+            </h3>
+            <div id="unmapped-grid" class="flex flex-wrap gap-4"></div>
         </div>
 
+    </div>
+
+    <!-- 彈出視窗 (Modal) -->
+    <div id="guest-modal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-[100] backdrop-blur-sm p-4">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all scale-100">
+            <div class="bg-indigo-600 px-6 py-4 flex justify-between items-center">
+                <h3 class="text-white font-bold text-lg" id="modal-title">Table ?</h3>
+                <button id="modal-close" class="text-white/80 hover:text-white transition-colors">
+                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <div class="p-6 max-h-[60vh] overflow-y-auto">
+                <div id="modal-list" class="space-y-2">
+                    <!-- 賓客列表將在此生成 -->
+                </div>
+            </div>
+            <div class="bg-slate-50 px-6 py-3 text-right border-t border-slate-100">
+                <span id="modal-count" class="text-xs font-bold text-slate-500">0 / 12 Guests</span>
+            </div>
+        </div>
     </div>
 
     <!-- JavaScript 邏輯 -->
     <script>
         // ==========================================
-        // 【設定區】
+        // 【設定區】Google Sheet URL
         // ==========================================
         const GOOGLE_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vThrqMB04QqHdh3OfyQT10e1b3AsEQgV3E3xAcdGzNghGkwcS5AxAyxDT6Eru3pRpNZ0nEa0o7XDUW1/pub?gid=0&single=true&output=csv";
+
         // ==========================================
+        // 【地圖配置】定義哪些桌號在哪個 Column
+        // ==========================================
+        const mapConfig = {
+            col1: [3, 9, 10, 18, 19, 27],   // 左外
+            col2: [2, 8, 11, 17, 20, 26],   // 左內
+            col3: [1, 7, 12, 16, 21, 25],   // 右內
+            col4: [5, 6, 13, 15, 22, 23]    // 右外
+        };
 
         let parsedData = {}; 
         let globalSearchTerm = '';
@@ -103,16 +342,27 @@
         document.addEventListener('DOMContentLoaded', () => {
             fetchData();
 
-            const searchInput = document.getElementById('search-input');
-            searchInput.addEventListener('input', (e) => {
+            // 搜尋事件
+            document.getElementById('search-input').addEventListener('input', (e) => {
                 globalSearchTerm = e.target.value;
-                renderGrid();
+                renderBallroom();
             });
 
-            const refreshBtn = document.getElementById('refresh-btn');
-            refreshBtn.addEventListener('click', fetchData);
+            // 重新整理
+            document.getElementById('refresh-btn').addEventListener('click', fetchData);
+
+            // 關閉 Modal
+            document.getElementById('modal-close').addEventListener('click', closeModal);
+            document.getElementById('guest-modal').addEventListener('click', (e) => {
+                if(e.target.id === 'guest-modal') closeModal();
+            });
+            // ESC 關閉
+            document.addEventListener('keydown', (e) => {
+                if(e.key === 'Escape') closeModal();
+            });
         });
 
+        // 讀取 CSV
         async function fetchData() {
             const statusMsg = document.getElementById('status-msg');
             const refreshIcon = document.getElementById('refresh-icon');
@@ -121,80 +371,59 @@
             refreshIcon.classList.add('spin');
 
             if (!GOOGLE_SHEET_CSV_URL || GOOGLE_SHEET_CSV_URL.includes("在此處貼上")) {
-                statusMsg.innerHTML = '<span class="text-red-500">❌ 尚未設定 Google Sheet 連結</span>';
+                statusMsg.innerHTML = '<span class="text-red-500">❌ 尚未設定 URL</span>';
                 refreshIcon.classList.remove('spin');
-                // 模擬 5 欄數據: 類別, 姓名, 教會, 酒店(號碼/Y), 派帖
-                const demoData = `親戚,張三,教會A,1,Y,親戚,李四,教會B,1,N,朋友,王五,教會A,Y,N`;
+                // 假資料演示 (包含一些特殊的桌號)
+                const demoData = `Demo,張三,教會A,1,Y,Demo,李四,教會B,1,N,Demo,王五,教會A,4,N,Demo,趙六,教會C,27,N`;
                 processCSV(demoData);
-                renderGrid();
+                renderBallroom();
                 return;
             }
 
             try {
                 const url = `${GOOGLE_SHEET_CSV_URL}&t=${new Date().getTime()}`;
                 const response = await fetch(url);
-                
                 if (!response.ok) throw new Error(`Status: ${response.status}`);
-                
                 const csvText = await response.text();
                 processCSV(csvText);
-                renderGrid();
-                
-                statusMsg.innerHTML = '<span class="text-green-600 font-medium">✅ 資料已同步 (5欄模式)</span>';
+                renderBallroom();
+                statusMsg.innerHTML = '<span class="text-green-600 font-medium">✅ 同步完成</span>';
             } catch (error) {
                 console.error(error);
-                statusMsg.innerHTML = `<span class="text-red-500">❌ 讀取失敗: ${error.message}</span>`;
+                statusMsg.innerHTML = `<span class="text-red-500">❌ 失敗: ${error.message}</span>`;
             } finally {
                 refreshIcon.classList.remove('spin');
             }
         }
 
+        // 解析 CSV (5欄模式)
         function processCSV(text) {
             const lines = text.split('\n');
             const tables = {};
-            
-            // 初始化 25 張檯
-            for (let i = 1; i <= 25; i++) {
-                tables[i] = [];
-            }
-
             let seatedCount = 0;
-            let pendingCount = 0; // 統計 "Y" 但無座位的
+            let pendingCount = 0;
 
             lines.forEach(line => {
                 const cols = line.replace(/\t/g, ',').split(',');
 
-                // 【核心修改】：i += 5，每 5 欄一組
+                // 每 5 欄一組
                 for (let i = 0; i < cols.length; i += 5) {
-                    // 根據新結構定義索引：
-                    // i+0: 類別 (忽略)
-                    // i+1: 姓名
-                    // i+2: 教會
-                    // i+3: 酒店 (桌號 或 "Y")
-                    // i+4: 派帖 (忽略)
-                    
                     const idxName = i + 1;
                     const idxChurch = i + 2;
                     const idxTable = i + 3;
 
-                    // 確保欄位存在
                     if (cols[idxName] && cols[idxTable]) {
                         const name = cols[idxName].trim().replace(/^"|"$/g, '');
-                        
-                        const churchRaw = cols[idxChurch] ? cols[idxChurch].trim() : '';
-                        const church = churchRaw.replace(/^"|"$/g, '');
-                        
+                        const church = (cols[idxChurch] ? cols[idxChurch].trim() : '').replace(/^"|"$/g, '');
                         const tableStr = cols[idxTable].trim().replace(/^"|"$/g, '').toUpperCase();
                         const tableNo = parseInt(tableStr, 10);
 
                         if (name) {
-                            // 情況 1: 是數字 (1-25) -> 分配座位
-                            if (!isNaN(tableNo) && tableNo >= 1 && tableNo <= 25) {
+                            if (!isNaN(tableNo) && tableNo > 0) { // 只要是正整數都收
+                                if (!tables[tableNo]) tables[tableNo] = [];
                                 tables[tableNo].push({ name, church });
                                 seatedCount++;
-                            } 
-                            // 情況 2: 是 "Y" (或其他文字) -> 視為待定
-                            else if (tableStr === 'Y') {
+                            } else if (tableStr === 'Y') {
                                 pendingCount++;
                             }
                         }
@@ -203,91 +432,143 @@
             });
 
             parsedData = tables;
-            
-            // 更新介面數字
             document.getElementById('seated-guests').textContent = seatedCount;
             document.getElementById('pending-guests').textContent = pendingCount;
         }
 
-        function renderGrid() {
-            const container = document.getElementById('tables-grid');
-            container.innerHTML = ''; 
+        // 渲染地圖主邏輯
+        function renderBallroom() {
+            // 清空所有 Column
+            ['col-1', 'col-2', 'col-3', 'col-4'].forEach(id => {
+                document.getElementById(id).innerHTML = '';
+            });
+            document.getElementById('unmapped-grid').innerHTML = '';
+            document.getElementById('unmapped-section').classList.add('hidden');
 
             const searchTerm = globalSearchTerm.toLowerCase();
+            const renderedTables = new Set(); // 記錄已渲染的桌號
 
-            Object.keys(parsedData).forEach(tableId => {
-                const guests = parsedData[tableId];
-                const count = guests.length;
-                
-                const isOver = count > 12;
-                const isNearFull = count >= 10 && count <= 12;
-                const isEmpty = count === 0;
+            // 1. 渲染地圖上的桌子
+            const columns = {
+                'col-1': mapConfig.col1,
+                'col-2': mapConfig.col2,
+                'col-3': mapConfig.col3,
+                'col-4': mapConfig.col4
+            };
 
-                let containerClass = "border-slate-200 bg-white";
-                let headerClass = "bg-slate-50 border-b border-slate-100";
-                let badgeClass = "bg-slate-200 text-slate-600";
-                
-                if (isOver) {
-                    containerClass = "border-red-300 bg-red-50/50 ring-1 ring-red-200";
-                    headerClass = "bg-red-100/50 border-b border-red-200";
-                    badgeClass = "bg-red-500 text-white";
-                } else if (isNearFull) {
-                    containerClass = "border-yellow-300 bg-yellow-50/30";
-                    headerClass = "bg-yellow-100/40 border-b border-yellow-200";
-                    badgeClass = "bg-yellow-500 text-white shadow-sm";
-                } else if (!isEmpty) {
-                    containerClass = "border-green-200 bg-green-50/30";
-                    headerClass = "bg-green-100/40 border-b border-green-200";
-                    badgeClass = "bg-green-600 text-white shadow-sm";
+            for (const [colId, tableIds] of Object.entries(columns)) {
+                const container = document.getElementById(colId);
+                tableIds.forEach(tableId => {
+                    renderedTables.add(tableId);
+                    const guests = parsedData[tableId] || [];
+                    const el = createTableElement(tableId, guests, searchTerm);
+                    container.appendChild(el);
+                });
+            }
+
+            // 2. 檢查是否有未在地圖上的桌號 (Overflow)
+            const allTableIds = Object.keys(parsedData).map(Number).sort((a,b)=>a-b);
+            const unmappedContainer = document.getElementById('unmapped-grid');
+            let hasUnmapped = false;
+
+            allTableIds.forEach(tId => {
+                if (!renderedTables.has(tId)) {
+                    hasUnmapped = true;
+                    const guests = parsedData[tId];
+                    const el = createTableElement(tId, guests, searchTerm);
+                    unmappedContainer.appendChild(el);
                 }
-
-                let hasHighlight = false;
-                const guestHtmlList = guests.map(g => {
-                    const isMatch = searchTerm && g.name.toLowerCase().includes(searchTerm);
-                    if (isMatch) hasHighlight = true;
-                    
-                    const highlightClass = isMatch 
-                        ? 'bg-yellow-100 text-yellow-900 border-yellow-300 font-bold shadow-sm' 
-                        : 'bg-white/60 border-transparent hover:border-slate-200 hover:bg-white text-slate-700';
-
-                    return `
-                        <div class="text-sm flex justify-between items-center px-3 py-1.5 rounded-md border ${highlightClass} transition-colors">
-                            <span class="truncate font-medium">${g.name}</span>
-                            <span class="text-[10px] text-slate-500 bg-slate-100/80 px-1.5 py-0.5 rounded ml-2 max-w-[40%] truncate">${g.church}</span>
-                        </div>
-                    `;
-                }).join('');
-
-                const emptyState = `<div class="h-24 flex flex-col items-center justify-center text-slate-300 text-xs italic"><span>此桌目前無人</span></div>`;
-
-                const cardEffect = hasHighlight 
-                    ? "ring-2 ring-indigo-500 shadow-xl scale-[1.02] z-10" 
-                    : "hover:shadow-md hover:border-indigo-200";
-
-                const cardHtml = `
-                    <div class="relative rounded-xl border ${containerClass} ${cardEffect} flex flex-col transition-all duration-200 overflow-hidden">
-                        <div class="flex justify-between items-center px-4 py-3 ${headerClass}">
-                            <div class="flex items-center gap-3">
-                                <div class="w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center font-serif text-lg font-bold shadow-sm">
-                                    ${tableId}
-                                </div>
-                                <span class="text-xs font-bold text-slate-400 uppercase tracking-widest">Table</span>
-                            </div>
-                            <div class="text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1.5 ${badgeClass}">
-                                ${isOver ? '<svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12" y2="16"/></svg>' : ''}
-                                ${count} / 12
-                            </div>
-                        </div>
-                        <div class="flex-1 p-3 min-h-[140px]">
-                            <div class="space-y-1.5">
-                                ${guests.length > 0 ? guestHtmlList : emptyState}
-                            </div>
-                        </div>
-                    </div>
-                `;
-
-                container.insertAdjacentHTML('beforeend', cardHtml);
             });
+
+            if (hasUnmapped) {
+                document.getElementById('unmapped-section').classList.remove('hidden');
+            }
+        }
+
+        // 建立單個圓桌 DOM
+        function createTableElement(tableId, guests, searchTerm) {
+            const count = guests.length;
+            const isOver = count > 12;
+            const isNearFull = count >= 10 && count <= 12;
+            const isEmpty = count === 0;
+
+            const div = document.createElement('div');
+            div.className = 'table-item';
+            
+            // 狀態顏色
+            if (isOver) div.classList.add('status-full');
+            else if (isNearFull) div.classList.add('status-near');
+            else div.classList.add('status-empty');
+
+            // 搜尋檢查
+            if (searchTerm && guests.some(g => g.name.toLowerCase().includes(searchTerm))) {
+                div.classList.add('matched');
+            }
+
+            // 內容
+            div.innerHTML = `
+                <div class="table-num">${tableId}</div>
+                <div class="guest-count">${count} / 12</div>
+            `;
+
+            // 點擊事件
+            div.onclick = () => openModal(tableId, guests, searchTerm);
+
+            return div;
+        }
+
+        // 開啟 Modal
+        function openModal(tableId, guests, searchTerm) {
+            const modal = document.getElementById('guest-modal');
+            const title = document.getElementById('modal-title');
+            const list = document.getElementById('modal-list');
+            const countLabel = document.getElementById('modal-count');
+
+            title.textContent = `Table ${tableId}`;
+            list.innerHTML = '';
+
+            if (guests.length === 0) {
+                list.innerHTML = '<div class="text-center text-slate-400 italic py-4">此桌目前無人入席</div>';
+            } else {
+                guests.forEach(g => {
+                    const isMatch = searchTerm && g.name.toLowerCase().includes(searchTerm);
+                    const highlightClass = isMatch ? 'bg-yellow-100 font-bold text-yellow-800 border-l-4 border-yellow-500' : 'bg-slate-50 text-slate-700';
+                    
+                    const row = document.createElement('div');
+                    row.className = `p-3 rounded-md flex justify-between items-center ${highlightClass}`;
+                    row.innerHTML = `
+                        <span>${g.name}</span>
+                        <span class="text-xs px-2 py-1 bg-white/50 rounded-full text-slate-500">${g.church}</span>
+                    `;
+                    list.appendChild(row);
+                });
+            }
+
+            // 狀態顏色更新 Modal Header
+            const header = modal.querySelector('.bg-indigo-600');
+            const count = guests.length;
+            
+            if (count > 12) {
+                header.className = 'px-6 py-4 flex justify-between items-center bg-red-500 transition-colors';
+                countLabel.className = 'text-xs font-bold text-red-500';
+            } else if (count >= 10) {
+                header.className = 'px-6 py-4 flex justify-between items-center bg-yellow-500 transition-colors';
+                countLabel.className = 'text-xs font-bold text-yellow-600';
+            } else {
+                header.className = 'px-6 py-4 flex justify-between items-center bg-indigo-600 transition-colors';
+                countLabel.className = 'text-xs font-bold text-indigo-600';
+            }
+
+            countLabel.textContent = `${count} / 12 Guests`;
+            
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('guest-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
         }
     </script>
 </body>
